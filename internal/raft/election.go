@@ -165,6 +165,7 @@ func (n *Node) becomeLeaderLocked() {
 	noop := &raftpb.LogEntry{Term: n.currentTerm, Index: n.lastIndex() + 1, Command: noopCommand()}
 	n.entries = append(n.entries, noop)
 	n.persistAppend([]*raftpb.LogEntry{noop})
+	n.advanceCommitLocked() // commits immediately in a single-node cluster
 
 	for _, peer := range n.peers {
 		go n.replicationLoop(n.leaderCtx, peer)

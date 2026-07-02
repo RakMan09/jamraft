@@ -438,6 +438,7 @@ func (n *Node) Propose(cmd []byte) (index uint64, term uint64, isLeader bool) {
 	e := &raftpb.LogEntry{Term: n.currentTerm, Index: n.lastIndex() + 1, Command: cmd}
 	n.entries = append(n.entries, e)
 	n.persistAppend([]*raftpb.LogEntry{e})
+	n.advanceCommitLocked() // commits immediately in a single-node cluster
 	n.triggerReplication()
 	return e.Index, e.Term, true
 }
@@ -455,6 +456,7 @@ func (n *Node) Submit(ctx context.Context, cmd []byte) ([]byte, error) {
 	n.persistAppend([]*raftpb.LogEntry{e})
 	w := &waiter{term: e.Term, ch: make(chan proposeResult, 1)}
 	n.pending[e.Index] = w
+	n.advanceCommitLocked() // commits immediately in a single-node cluster
 	n.triggerReplication()
 	n.mu.Unlock()
 

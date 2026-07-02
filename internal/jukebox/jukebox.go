@@ -7,6 +7,7 @@ package jukebox
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 // Op names for jukebox commands.
@@ -76,8 +77,10 @@ type State struct {
 	LastResult map[string][]byte `json:"lastResult"`
 }
 
-// Jukebox is the state machine wrapper around State.
+// Jukebox is the state machine wrapper around State. It is safe for concurrent
+// use: the Raft apply loop mutates it while API/UI readers view it.
 type Jukebox struct {
+	mu sync.Mutex
 	st State
 }
 
@@ -95,6 +98,8 @@ func New() *Jukebox {
 // It is deterministic: identical input on identical prior state yields identical
 // output and next state.
 func (j *Jukebox) Apply(cmd []byte) []byte {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	var c Command
 	if err := json.Unmarshal(cmd, &c); err != nil {
 		r, _ := json.Marshal(Result{OK: false, Error: fmt.Sprintf("bad command: %v", err)})
@@ -214,17 +219,23 @@ func (j *Jukebox) cloneQueue() []*Song {
 
 // View returns a read-only snapshot of the current visible state (for reads).
 func (j *Jukebox) View() Result {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	return j.snapshotResult(true, "")
 }
 
 // Snapshot serializes the entire state for log compaction.
 func (j *Jukebox) Snapshot() []byte {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	b, _ := json.Marshal(j.st)
 	return b
 }
 
 // Restore replaces the entire state from a snapshot produced by Snapshot.
 func (j *Jukebox) Restore(data []byte) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	if len(data) == 0 {
 		return nil
 	}
