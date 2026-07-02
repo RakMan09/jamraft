@@ -1,0 +1,54 @@
+# A 3-node JamRaft cluster. Each node runs Raft (gRPC on :7000) and the party
+# UI + API (HTTP on :8080), reachable on the host at :8080, :8081, :8082.
+#
+#   docker compose up --build
+#   open http://localhost:8080
+#   # click "Kill this node" on the leader and watch playback continue.
+
+services:
+  node0:
+    build: .
+    command:
+      - -id=node0
+      - -grpc=:7000
+      - -http=:8080
+      - -peers=node0=node0:7000,node1=node1:7000,node2=node2:7000
+      - -http-peers=node0=http://node0:8080,node1=http://node1:8080,node2=http://node2:8080
+      - -data=/data
+    ports:
+      - "8080:8080"
+    volumes:
+      - node0-data:/data
+
+  node1:
+    build: .
+    command:
+      - -id=node1
+      - -grpc=:7000
+      - -http=:8080
+      - -peers=node0=node0:7000,node1=node1:7000,node2=node2:7000
+      - -http-peers=node0=http://node0:8080,node1=http://node1:8080,node2=http://node2:8080
+      - -data=/data
+    ports:
+      - "8081:8080"
+    volumes:
+      - node1-data:/data
+
+  node2:
+    build: .
+    command:
+      - -id=node2
+      - -grpc=:7000
+      - -http=:8080
+      - -peers=node0=node0:7000,node1=node1:7000,node2=node2:7000
+      - -http-peers=node0=http://node0:8080,node1=http://node1:8080,node2=http://node2:8080
+      - -data=/data
+    ports:
+      - "8082:8080"
+    volumes:
+      - node2-data:/data
+
+volumes:
+  node0-data:
+  node1-data:
+  node2-data:
