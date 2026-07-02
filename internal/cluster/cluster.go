@@ -191,23 +191,39 @@ func (c *SimCluster) leaderStable(leader *raft.Node) bool {
 	return agree >= (len(c.ids)/2)+1
 }
 
-// Submit submits a command to the current leader, retrying on leader changes
-// until success or the context expires.
+// leaderCandidates returns all running nodes that currently claim leadership.
+func (c *SimCluster) leaderCandidates() []*raft.Node {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []*raft.Node
+	for _, id := range c.ids {
+		if n := c.nodes[id]; n != nil && n.IsLeader() {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// Submit submits a command to a leader, retrying across nodes and leader
+// changes until success or the context expires. Because the state machine
+// de-duplicates by (clientId, seq), retrying the same command is safe.
 func (c *SimCluster) Submit(ctx context.Context, cmd []byte) ([]byte, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		n, ok := c.Leader()
-		if !ok {
+		cands := c.leaderCandidates()
+		if len(cands) == 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		sctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		res, err := n.Submit(sctx, cmd)
-		cancel()
-		if err == nil {
-			return res, nil
+		for _, n := range cands {
+			sctx, cancel := context.WithTimeout(ctx, 400*time.Millisecond)
+			res, err := n.Submit(sctx, cmd)
+			cancel()
+			if err == nil {
+				return res, nil
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
