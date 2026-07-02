@@ -194,6 +194,7 @@ func (n *Node) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesReque
 	}
 	n.role = Follower
 	n.leaderID = req.LeaderId
+	n.lastLeaderContact = time.Now()
 	n.resetElectionDeadline()
 	resp.Term = n.currentTerm
 

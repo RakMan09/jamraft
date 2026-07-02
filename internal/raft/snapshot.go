@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"time"
 
 	"github.com/rakman09/jamraft/internal/store"
 	raftpb "github.com/rakman09/jamraft/proto/raftpb"
@@ -104,6 +105,7 @@ func (n *Node) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshotR
 	}
 	n.role = Follower
 	n.leaderID = req.LeaderId
+	n.lastLeaderContact = time.Now()
 	n.resetElectionDeadline()
 	resp.Term = n.currentTerm
 

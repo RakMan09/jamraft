@@ -80,9 +80,17 @@ type Config struct {
 	ElectionTimeoutMax time.Duration
 	SnapshotThreshold  int // take a snapshot after the log exceeds this many entries
 
+	// DisablePreVote turns off the pre-vote extension. Pre-vote is ON by default
+	// (zero value) because it prevents a partitioned or recently-restarted node
+	// with a stale log from disrupting a healthy leader.
+	DisablePreVote bool
+
 	Logger *log.Logger
 	Rand   *rand.Rand
 }
+
+// PreVote reports whether the pre-vote extension is enabled.
+func (c *Config) preVoteEnabled() bool { return !c.DisablePreVote }
 
 func (c *Config) withDefaults() {
 	if c.HeartbeatInterval == 0 {
@@ -146,7 +154,8 @@ type Node struct {
 	triggerCh  map[string]chan struct{}
 
 	// Election timing.
-	electionDeadline time.Time
+	electionDeadline  time.Time
+	lastLeaderContact time.Time // last valid AppendEntries/InstallSnapshot from a leader
 
 	// apply loop signalling and client proposal waiters.
 	applyCh chan struct{}

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JamRaft — Party Jukebox</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>JamRaft</h1>
+    <p class="tagline">A crash-proof collaborative party jukebox, powered by Raft consensus.</p>
+  </header>
+
+  <section class="cluster">
+    <div class="cluster-status">
+      <span class="dot" id="health-dot"></span>
+      <span id="cluster-summary">connecting&hellip;</span>
+    </div>
+    <div id="nodes" class="nodes"></div>
+  </section>
+
+  <main>
+    <section class="now-playing">
+      <h2>Now Playing</h2>
+      <div id="now-playing" class="track big">Nothing playing</div>
+      <div class="controls">
+        <button id="btn-play-next">Play next &#9193;</button>
+        <button id="btn-vote-skip" class="secondary">Vote to skip <span id="skip-count"></span></button>
+      </div>
+    </section>
+
+    <section class="add-song">
+      <h2>Add a song</h2>
+      <form id="add-form">
+        <input id="song-title" type="text" placeholder="Song title" required />
+        <input id="added-by" type="text" placeholder="Your name" />
+        <button type="submit">Add to queue</button>
+      </form>
+    </section>
+
+    <section class="queue">
+      <h2>Up next <span id="queue-count" class="muted"></span></h2>
+      <ol id="queue-list" class="queue-list"></ol>
+    </section>
+  </main>
+
+  <footer>
+    <span class="muted">JamRaft — from-scratch Raft (leader election, log replication, snapshots, linearizable reads).</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
