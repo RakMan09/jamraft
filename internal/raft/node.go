@@ -240,12 +240,12 @@ func (n *Node) Start() {
 	}
 	n.running = true
 	n.resetElectionDeadline()
+	n.logf("started (lastIndex=%d, commit=%d)", n.lastIndex(), n.commitIndex)
 	n.mu.Unlock()
 
 	n.wg.Add(2)
 	go n.electionLoop()
 	go n.applyLoop()
-	n.logf("started (term=%d, lastIndex=%d, commit=%d)", n.currentTerm, n.lastIndex(), n.commitIndex)
 }
 
 // Stop halts the node and waits for background goroutines to exit.
