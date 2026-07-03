@@ -12,6 +12,28 @@ is implemented here **from scratch** (no external Raft library): leader election
 log replication, persistence, snapshotting, linearizable reads, and pre-vote —
 verified by a Jepsen-style fault-injection harness.
 
+## Live demo (runs in your browser)
+
+The Raft core is compiled to **WebAssembly**, so an entire cluster runs live in a
+browser tab — no backend required. Kill nodes, isolate them (simulated network
+partition), or crank up the message-drop rate, and watch a new leader get
+elected while the queue stays consistent. **It is the actual `internal/raft` code
+running**, not a mockup.
+
+Live: **https://rakman09.github.io/jamraft/** (after enabling Pages — see below).
+
+Run it locally:
+
+```bash
+./scripts/build-wasm.sh
+cd demo && python3 -m http.server 8000   # open http://localhost:8000
+```
+
+Publish it (free, always-on) via GitHub Pages: in the repo, go to
+**Settings -> Pages -> Source: "GitHub Actions"**. The
+[`pages.yml`](.github/workflows/pages.yml) workflow then builds the WASM and
+deploys `demo/` on every push to `main`.
+
 ## What's implemented
 
 | Area | Where |

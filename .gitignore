@@ -3,3 +3,7 @@ bin/
 data/
 .DS_Store
 node_modules/
+
+# Built WebAssembly demo artifacts (produced by scripts/build-wasm.sh / CI)
+demo/jamraft.wasm
+demo/wasm_exec.js

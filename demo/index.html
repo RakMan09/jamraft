@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JamRaft — live Raft demo (in your browser)</title>
+  <link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+  <header>
+    <h1>JamRaft</h1>
+    <p class="tagline">A from-scratch <strong>Raft</strong> cluster running <em>live in your browser</em> as WebAssembly. Kill nodes, cut the network, watch consensus recover.</p>
+    <p class="sub" id="boot">Loading WebAssembly&hellip;</p>
+  </header>
+
+  <main id="app" hidden>
+    <section class="toolbar">
+      <label>Cluster size
+        <select id="size">
+          <option value="3">3 nodes</option>
+          <option value="5" selected>5 nodes</option>
+          <option value="7">7 nodes</option>
+        </select>
+      </label>
+      <button id="reset" class="secondary">Restart cluster</button>
+      <button id="heal" class="secondary">Heal network</button>
+      <label class="drop">Message drop rate: <span id="drop-val">0%</span>
+        <input id="drop" type="range" min="0" max="90" value="0" />
+      </label>
+      <span class="stats" id="stats"></span>
+    </section>
+
+    <section class="nodes-panel">
+      <h2>Cluster</h2>
+      <div id="nodes" class="nodes"></div>
+      <p class="hint">Tip: click <strong>Kill</strong> on the leader (the highlighted node) and watch a new leader get elected. <strong>Isolate</strong> simulates a network partition.</p>
+    </section>
+
+    <section class="jukebox">
+      <div class="col">
+        <h2>Now Playing</h2>
+        <div id="now-playing" class="track">Nothing playing</div>
+        <div class="controls">
+          <button id="play-next">Play next &#9193;</button>
+          <button id="vote-skip" class="secondary">Vote skip <span id="skip"></span></button>
+        </div>
+        <form id="add" class="add">
+          <input id="title" placeholder="Song title" required />
+          <input id="by" placeholder="Your name" />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+      <div class="col">
+        <h2>Up next <span id="qc" class="muted"></span></h2>
+        <ol id="queue" class="queue"></ol>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="muted">The actual Raft code (<code>internal/raft</code>) compiled to WASM — leader election, log replication, snapshots, linearizable reads.</span>
+    <a id="repo" href="#" target="_blank" rel="noopener">View source</a>
+  </footer>
+
+  <script src="wasm_exec.js"></script>
+  <script src="demo.js"></script>
+</body>
+</html>
