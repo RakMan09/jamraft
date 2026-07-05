@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Build (native + wasm)
+        run: |
+          go build ./...
+          GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/wasm
+      - name: Vet
+        run: go vet ./...
+      - name: Unit + simulator tests (race)
+        run: go test ./internal/... -race -count=1
+      - name: Chaos / linearizability (short)
+        run: go test ./chaos -run TestJepsen -short -count=1
