@@ -2,6 +2,11 @@
 
 [![CI](https://github.com/RakMan09/jamraft/actions/workflows/ci.yml/badge.svg)](https://github.com/RakMan09/jamraft/actions/workflows/ci.yml)
 
+### ▶ Live demo: **https://rakman09.github.io/jamraft/**
+
+A real, from-scratch Raft cluster running **in your browser** — kill nodes, cut the
+network, and watch consensus recover. ([How to use it](#live-demo-in-your-browser).)
+
 JamRaft is a shared party music queue run by a small **cluster** of nodes. Everyone
 adds songs; the cluster agrees on the **exact play order**; and if the node
 "hosting" the party dies mid-song, playback continues in the agreed order with
@@ -14,27 +19,70 @@ is implemented here **from scratch** (no external Raft library): leader election
 log replication, persistence, snapshotting, linearizable reads, and pre-vote —
 verified by a Jepsen-style fault-injection harness.
 
-## Live demo (runs in your browser)
+## Live demo (in your browser)
 
-The Raft core is compiled to **WebAssembly**, so an entire cluster runs live in a
-browser tab — no backend required. Kill nodes, isolate them (simulated network
-partition), or crank up the message-drop rate, and watch a new leader get
-elected while the queue stays consistent. **It is the actual `internal/raft` code
-running**, not a mockup.
+**▶ https://rakman09.github.io/jamraft/**
 
-Live: **https://rakman09.github.io/jamraft/** (after enabling Pages — see below).
+The Raft core is compiled to **WebAssembly**, so a full multi-node cluster runs
+live inside the page — no server, no install. It is the actual `internal/raft`
+code executing, not a mockup or a recording. (First load fetches a ~17 MB WASM
+file, so give it a few seconds.)
 
-Run it locally:
+### What you're looking at (the jukebox metaphor)
+
+Raft's job is to keep one **ordered list** identical across many computers even as
+they crash. That is abstract, so JamRaft dresses the list up as a **shared party
+song queue**:
+
+- **Up next** = the shared list every node must agree on (Raft's replicated log).
+- **Add a song** = a command sent into the cluster; it only "counts" once a
+  **majority** of nodes have stored it.
+- **Play next** = advance the list (front song → "Now Playing"). *There is no
+  actual audio* — it is just another agreed-upon state change.
+- **Now Playing / Vote skip** = friendlier views and actions on that same state.
+
+The songs are stand-ins for "any data the cluster agrees on." The real thing on
+display is that **every surviving node ends up with the exact same queue, in the
+exact same order**, no matter what you break.
+
+### The controls
+
+Each node card shows its **role** (leader / follower / candidate / down),
+**term** (the election counter), **commit** index, and **log** size.
+
+- **Kill** — crash a node so it stops responding. Kill the *leader* and watch a
+  new one get elected within a fraction of a second — the queue is untouched.
+- **Restart** — bring a killed node back; it catches up from the others (via log
+  replication or a snapshot).
+- **Isolate / Rejoin** — cut a node off from the rest (a simulated network
+  partition). An isolated leader can't reach a majority, so the others elect a
+  new leader; the isolated one steps down once it reconnects.
+- **Message drop rate** — randomly throw away messages between nodes to simulate
+  a flaky network. **Low** = smooth and stable; **high** = constant elections and
+  stalled commits — but *never wrong or inconsistent data*, it just slows down or
+  pauses until the network improves. The toolbar counter shows messages delivered
+  vs dropped.
+- **Heal network** — clear all isolation and message drops.
+- **Cluster size / Restart cluster** — rebuild a fresh 3-, 5-, or 7-node cluster.
+
+### Things to try
+
+1. Add a few songs, then **Kill** the highlighted leader — a new leader appears
+   and the queue survives unchanged.
+2. **Isolate** two of five nodes — the remaining three keep working; rejoin them
+   and they catch up.
+3. Drag **message drop rate** to ~80% — watch terms climb and commits stall, then
+   hit **Heal network** and see it recover on its own.
+
+### Run or publish it yourself
 
 ```bash
 ./scripts/build-wasm.sh
 cd demo && python3 -m http.server 8000   # open http://localhost:8000
 ```
 
-Publish it (free, always-on) via GitHub Pages: in the repo, go to
-**Settings -> Pages -> Source: "GitHub Actions"**. The
-[`pages.yml`](.github/workflows/pages.yml) workflow then builds the WASM and
-deploys `demo/` on every push to `main`.
+It auto-deploys to GitHub Pages via [`pages.yml`](.github/workflows/pages.yml) on
+every push to `main` (Pages source: **Settings → Pages → GitHub Actions**).
 
 ## What's implemented
 
@@ -102,7 +150,7 @@ linearizable:   500 (Ok)
 VIOLATIONS:     0
 ```
 
-**5. See it live.** Open the [browser demo](#live-demo-runs-in-your-browser), or
+**5. See it live.** Open the [browser demo](#live-demo-in-your-browser), or
 run a real cluster (`./scripts/run-local.sh`) and kill the leader. A captured run
 of exactly that (leader `n0` at term 1 killed; `n1` elected at term 2; queue
 untouched):
@@ -112,6 +160,31 @@ untouched):
 === KILL LEADER n0 ===   {"status":"shutting down"}
 === AFTER  ===   node n1: role=leader term=2   queue=[Song A, Song B]   # intact
 ```
+
+## Benchmarks & metrics
+
+Reproduce with `go run ./cmd/bench`. Measured over the **in-process transport on
+a single machine** (no network), so these capture this implementation's
+consensus-pipeline and apply overhead — not WAN latency. Representative run:
+
+```
+throughput  size=3      2317 enqueues/sec   commit latency p50=6.2ms  p99=22.1ms
+throughput  size=5      1954 enqueues/sec   commit latency p50=7.3ms  p99=23.5ms
+failover    size=3   median=191ms  p95=288ms  (over 15 leader kills)
+failover    size=5   median=188ms  p95=240ms  (over 15 leader kills)
+reads       linearizable p50=3µs  p99=21µs   |   local (stale) p50=0s
+```
+
+| Metric | Result | Notes |
+| --- | --- | --- |
+| Command throughput | **~2,300 enqueues/sec** (3 nodes), ~1,950 (5 nodes) | single Raft group, one host |
+| Commit latency | **p50 ~6 ms, p99 ~22 ms** (16 concurrent clients) | submit → replicated to majority → applied |
+| Leader failover | **median ~190 ms, p95 <300 ms** | kill leader → new leader commits; well under the 1 s target |
+| Linearizable read overhead | **+a few µs of CPU** over a local read | in a real deployment this is one heartbeat round-trip to a majority |
+| Linearizability | **0 violations / 500 histories / 25,000 ops** | Porcupine checker, `cmd/chaos` |
+
+Failover time is governed mainly by the randomized election timeout
+(150–300 ms), which is configurable via flags on `cmd/node`.
 
 ## Architecture
 
@@ -250,6 +323,8 @@ e.g. `{"op":"enqueue","song":{...},"clientId":"c1","seq":42}`.
 jamraft/
   cmd/node/       # the node binary (Raft + gRPC + HTTP + UI)
   cmd/chaos/      # standalone chaos runner (N histories + report)
+  cmd/bench/      # throughput / latency / failover benchmarks
+  cmd/wasm/       # in-browser WebAssembly demo entrypoint
   internal/
     raft/         # core: state, timers, RPC handlers (the heart)
     transport/    # gRPC + in-process deterministic simulator
