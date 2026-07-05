@@ -1,5 +1,7 @@
 # JamRaft — a crash-proof collaborative party jukebox
 
+[![CI](https://github.com/RakMan09/jamraft/actions/workflows/ci.yml/badge.svg)](https://github.com/RakMan09/jamraft/actions/workflows/ci.yml)
+
 JamRaft is a shared party music queue run by a small **cluster** of nodes. Everyone
 adds songs; the cluster agrees on the **exact play order**; and if the node
 "hosting" the party dies mid-song, playback continues in the agreed order with
@@ -49,6 +51,67 @@ deploys `demo/` on every push to `main`.
 | Leader-aware client with `(clientId, seq)` dedup | [`internal/client`](internal/client) |
 | HTTP API + embedded party UI | [`internal/server`](internal/server), [`web`](web) |
 | Jepsen-style chaos harness + Porcupine checker | [`chaos`](chaos) |
+
+## Proof it works
+
+Correctness here is *checkable*, not just claimed. Pick whichever level of rigor
+you want:
+
+**1. One command (reproduce everything, ~1-2 min):**
+
+```bash
+./scripts/verify.sh
+```
+
+It builds (native + WebAssembly), runs the full test suite, and runs a batch of
+randomized fault-injected histories checked for linearizability. `HISTORIES=500
+./scripts/verify.sh` runs the heavier batch.
+
+**2. Continuous integration.** Every push runs the tests + a chaos batch via
+[GitHub Actions](.github/workflows/ci.yml) — see the CI badge above and the live
+logs in the Actions tab.
+
+**3. Named tests for each Raft property** (`go test ./... -v`):
+
+| Property | Test |
+| --- | --- |
+| A single leader is elected | `TestLeaderElection` |
+| A new leader takes over when the leader crashes | `TestReElectionAfterLeaderCrash` |
+| Committed data survives a leader change | `TestCommitSurvivesLeaderChange` |
+| All nodes converge to the same log | `TestLogReplicationConverges` |
+| State survives restart (replayed from disk) | `TestSingleNodeRestartReplaysLog` |
+| Kill-all then restart keeps the queue | `TestFullClusterRecovery` |
+| Snapshots compact the log | `TestSnapshotCompactsLog` |
+| A lagging node catches up via snapshot | `TestInstallSnapshotCatchesUpLaggingFollower` |
+| A partitioned leader refuses stale reads | `TestIsolatedLeaderCannotServeStaleRead` |
+| Retried requests apply exactly once | `TestExactlyOnceEnqueue` |
+| No linearizability violations under faults | `TestJepsen` |
+
+**4. The headline result.** `go run ./cmd/chaos -histories 500` ran **500
+randomized fault-injected histories (25,000 operations)** — crashing leaders,
+partitioning nodes, dropping messages, restarting nodes — and a
+[Porcupine](https://github.com/anishathalye/porcupine) linearizability checker
+found **0 violations and 0 indeterminate results**:
+
+```
+=== JamRaft chaos report ===
+histories:      500
+cluster:        5 nodes, 2 clients x 25 ops
+total ops:      25000
+linearizable:   500 (Ok)
+VIOLATIONS:     0
+```
+
+**5. See it live.** Open the [browser demo](#live-demo-runs-in-your-browser), or
+run a real cluster (`./scripts/run-local.sh`) and kill the leader. A captured run
+of exactly that (leader `n0` at term 1 killed; `n1` elected at term 2; queue
+untouched):
+
+```
+=== BEFORE ===   node n0: role=leader term=1   queue=[Song A, Song B]
+=== KILL LEADER n0 ===   {"status":"shutting down"}
+=== AFTER  ===   node n1: role=leader term=2   queue=[Song A, Song B]   # intact
+```
 
 ## Architecture
 
