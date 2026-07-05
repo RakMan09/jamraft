@@ -74,30 +74,86 @@ function render() {
     `leader: ${s.leaderId || "—"}  ·  msgs delivered ${s.delivered} / dropped ${s.dropped}`;
 }
 
+// Node cards are created ONCE and then updated in place. Previously the whole
+// list was rebuilt every render tick (400ms), which recreated the Kill/Isolate
+// buttons; a click landing during a rebuild was lost because the button was
+// removed between mousedown and mouseup. Persistent elements fix that.
+let nodeEls = {}; // id -> { root, badge, meta, primary, iso }
+let nodeSig = "";
+
+function buildCard(id) {
+  const root = document.createElement("div");
+  root.className = "node";
+
+  const name = document.createElement("div");
+  name.className = "name";
+  const label = document.createElement("span");
+  label.textContent = id;
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  name.append(label, badge);
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const primary = document.createElement("button");
+  const iso = document.createElement("button");
+  actions.append(primary, iso);
+
+  // Handlers are attached once; they read current state at click time, so the
+  // buttons never need to be recreated.
+  primary.addEventListener("click", () => {
+    if (root.dataset.down === "true") window.jrRestart(id);
+    else window.jrKill(id);
+    render();
+  });
+  iso.addEventListener("click", () => {
+    window.jrToggleIsolate(id);
+    render();
+  });
+
+  root.append(name, meta, actions);
+  return { root, badge, meta, primary, iso };
+}
+
 function renderNodes(s) {
   const wrap = document.getElementById("nodes");
-  wrap.innerHTML = "";
-  for (const n of s.nodes) {
-    const card = document.createElement("div");
-    card.className = "node" + (n.leader ? " leader" : "") + (n.down ? " down" : "") + (n.isolated ? " isolated" : "");
-    const role = n.down ? "down" : n.role;
-    card.innerHTML = `
-      <div class="name">${n.id} <span class="badge ${role}">${role.toUpperCase()}</span></div>
-      <div class="meta">
-        term <b>${n.term}</b> · commit <b>${n.commit}</b><br/>
-        log ${n.logSize} · applied ${n.applied}${n.snapshotIndex ? " · snap@" + n.snapshotIndex : ""}
-      </div>`;
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    if (n.down) {
-      actions.appendChild(btn("Restart", "tiny secondary", () => { window.jrRestart(n.id); render(); }));
-    } else {
-      actions.appendChild(btn("Kill", "tiny kill", () => { window.jrKill(n.id); render(); }));
-      const iso = btn(n.isolated ? "Rejoin" : "Isolate", "tiny iso" + (n.isolated ? " active" : ""), () => { window.jrToggleIsolate(n.id); render(); });
-      actions.appendChild(iso);
+  const sig = s.nodes.map((n) => n.id).join(",");
+  if (sig !== nodeSig) {
+    wrap.innerHTML = "";
+    nodeEls = {};
+    for (const n of s.nodes) {
+      const els = buildCard(n.id);
+      nodeEls[n.id] = els;
+      wrap.appendChild(els.root);
     }
-    card.appendChild(actions);
-    wrap.appendChild(card);
+    nodeSig = sig;
+  }
+  for (const n of s.nodes) {
+    const els = nodeEls[n.id];
+    if (!els) continue;
+    const role = n.down ? "down" : n.role;
+    els.root.className =
+      "node" + (n.leader ? " leader" : "") + (n.down ? " down" : "") + (n.isolated ? " isolated" : "");
+    els.root.dataset.down = n.down ? "true" : "false";
+    els.badge.className = "badge " + role;
+    els.badge.textContent = role.toUpperCase();
+    els.meta.innerHTML =
+      `term <b>${n.term}</b> · commit <b>${n.commit}</b><br/>` +
+      `log ${n.logSize} · applied ${n.applied}${n.snapshotIndex ? " · snap@" + n.snapshotIndex : ""}`;
+    if (n.down) {
+      els.primary.textContent = "Restart";
+      els.primary.className = "tiny secondary";
+      els.iso.style.display = "none";
+    } else {
+      els.primary.textContent = "Kill";
+      els.primary.className = "tiny kill";
+      els.iso.style.display = "";
+      els.iso.textContent = n.isolated ? "Rejoin" : "Isolate";
+      els.iso.className = "tiny iso" + (n.isolated ? " active" : "");
+    }
   }
 }
 
@@ -122,14 +178,6 @@ function renderJukebox(s) {
     li.append(left, right);
     list.appendChild(li);
   });
-}
-
-function btn(label, cls, onclick) {
-  const b = document.createElement("button");
-  b.className = cls;
-  b.textContent = label;
-  b.onclick = onclick;
-  return b;
 }
 
 function escapeHtml(str) {
