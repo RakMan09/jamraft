@@ -161,6 +161,31 @@ untouched):
 === AFTER  ===   node n1: role=leader term=2   queue=[Song A, Song B]   # intact
 ```
 
+## Benchmarks & metrics
+
+Reproduce with `go run ./cmd/bench`. Measured over the **in-process transport on
+a single machine** (no network), so these capture this implementation's
+consensus-pipeline and apply overhead — not WAN latency. Representative run:
+
+```
+throughput  size=3      2317 enqueues/sec   commit latency p50=6.2ms  p99=22.1ms
+throughput  size=5      1954 enqueues/sec   commit latency p50=7.3ms  p99=23.5ms
+failover    size=3   median=191ms  p95=288ms  (over 15 leader kills)
+failover    size=5   median=188ms  p95=240ms  (over 15 leader kills)
+reads       linearizable p50=3µs  p99=21µs   |   local (stale) p50=0s
+```
+
+| Metric | Result | Notes |
+| --- | --- | --- |
+| Command throughput | **~2,300 enqueues/sec** (3 nodes), ~1,950 (5 nodes) | single Raft group, one host |
+| Commit latency | **p50 ~6 ms, p99 ~22 ms** (16 concurrent clients) | submit → replicated to majority → applied |
+| Leader failover | **median ~190 ms, p95 <300 ms** | kill leader → new leader commits; well under the 1 s target |
+| Linearizable read overhead | **+a few µs of CPU** over a local read | in a real deployment this is one heartbeat round-trip to a majority |
+| Linearizability | **0 violations / 500 histories / 25,000 ops** | Porcupine checker, `cmd/chaos` |
+
+Failover time is governed mainly by the randomized election timeout
+(150–300 ms), which is configurable via flags on `cmd/node`.
+
 ## Architecture
 
 ```mermaid
@@ -298,6 +323,8 @@ e.g. `{"op":"enqueue","song":{...},"clientId":"c1","seq":42}`.
 jamraft/
   cmd/node/       # the node binary (Raft + gRPC + HTTP + UI)
   cmd/chaos/      # standalone chaos runner (N histories + report)
+  cmd/bench/      # throughput / latency / failover benchmarks
+  cmd/wasm/       # in-browser WebAssembly demo entrypoint
   internal/
     raft/         # core: state, timers, RPC handlers (the heart)
     transport/    # gRPC + in-process deterministic simulator
